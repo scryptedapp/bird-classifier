@@ -75,16 +75,17 @@ val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_w
 
 # Model setup
 num_classes = len(train_dataset.classes)
-model = torchvision.models.resnet50(pretrained=True)
+model = torchvision.models.efficientnet_b3(pretrained=True)
 
+in_features = model.classifier[1].in_features
 # Replace final FC layer
-model.fc = nn.Linear(model.fc.in_features, num_classes)
+model.classifier[1] = nn.Linear(in_features, num_classes)
 
 if not args.resume:
     # Optional: freeze all layers except classifier for transfer learning
     for param in model.parameters():
         param.requires_grad = False
-    for param in model.fc.parameters():
+    for param in model.classifier[1].parameters():
         param.requires_grad = True
 
 # Multi-GPU support
@@ -186,6 +187,13 @@ for epoch in range(num_epochs):
     # Save best model
     if val_loss < best_val_loss:
         best_val_loss = val_loss
-        torch.save(model.state_dict(), "checkpoints/best_model.pth")
+        torch.save({
+            'epoch': epoch + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'train_loss': train_loss,
+            'val_loss': val_loss,
+            'val_accuracy': val_accuracy
+        }, "checkpoints/best_model.pth")
 
 print("Training complete.")

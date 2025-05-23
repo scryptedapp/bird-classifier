@@ -1,5 +1,6 @@
 import argparse
 import torch
+import torch.nn as nn
 import torchvision.transforms as transforms
 from torchvision import models
 from PIL import Image
@@ -20,22 +21,23 @@ with open('classmap.json', 'r') as f:
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Load model
-model = models.resnet50(pretrained=False)
+model = models.efficientnet_b3(pretrained=False)
+
+# Replace final FC layer
 num_classes = len(idx_to_class)
-model.fc = torch.nn.Linear(model.fc.in_features, num_classes)
-state_dict = torch.load(args.checkpoint, map_location=device)
-if 'model_state_dict' in state_dict:
-    model.load_state_dict(state_dict['model_state_dict'])
-else:
-    # Strip 'module.' prefix if present (from DataParallel)
-    if any(k.startswith('module.') for k in state_dict.keys()):
-        from collections import OrderedDict
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            new_key = k.replace('module.', '', 1)  # remove only first 'module.'
-            new_state_dict[new_key] = v
-        state_dict = new_state_dict
-    model.load_state_dict(state_dict)
+in_features = model.classifier[1].in_features
+model.classifier[1] = nn.Linear(in_features, num_classes)
+
+state_dict = torch.load("checkpoints/best_model.pth", map_location=device)
+# Strip 'module.' prefix if present (from DataParallel)
+if any(k.startswith('module.') for k in state_dict['model_state_dict'].keys()):
+    from collections import OrderedDict
+    new_state_dict = OrderedDict()
+    for k, v in state_dict['model_state_dict'].items():
+        new_key = k.replace('module.', '', 1)  # remove only first 'module.'
+        new_state_dict[new_key] = v
+    state_dict = new_state_dict
+model.load_state_dict(state_dict)
 model = model.to(device)
 model.eval()
 
